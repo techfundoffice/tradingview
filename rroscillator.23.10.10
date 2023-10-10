@@ -1,0 +1,470 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © grzegorz.wodnicki
+// ver 14
+//@version=5
+indicator("R:R Oscillator")
+
+timeframe_name(_tf) =>
+    _ret = "Minute"
+    _amount = str.tonumber(_tf)
+    if (str.tostring(_amount) == 'NaN')
+        _amount := str.tonumber(str.substring(_tf,0,str.length(_tf)-1))
+    if (str.contains(_tf,"S"))
+        _ret := "Second"
+        
+    if (str.contains(_tf,"D"))
+        _ret := "Day"
+        
+    if (str.contains(_tf,"W"))
+        _ret := "Week"
+        
+    if (str.contains(_tf,"M"))
+        _ret := "Month"
+        
+    if ( (_amount>=60) and (_ret=="Minute") and (_amount%60==0))
+        _amount := _amount/60 
+        _ret := "Hour"
+        
+    str.tostring(_amount)+" "+_ret+(_amount>1?"s":"")
+getFontSize(_font) =>
+    _res = size.auto
+    if _font == 'Huge'
+        _res := size.huge
+    if _font == 'Large'
+        _res := size.large
+    if _font == 'Normal'
+        _res := size.normal
+    if _font == 'Small'
+        _res := size.small
+    if _font == 'Tiny'
+        _res := size.tiny
+    _res    
+
+
+
+
+var grpcolors = "Colors"
+
+_heatmap_colors = input.bool(true,"Heatmap Colors", group = grpcolors)
+
+var grp1t = "Time Frames"
+_timeframe_1_b = input.bool(true,"", group = grp1t, inline='t1_')
+_timeframe_1 = input.timeframe("1M",'1st timeframe', group = grp1t, inline = 't1_')
+_timeframe_1_candles = input.int(10,"Lookback:",group = grp1t, inline = 't1')
+_timeframe_1_long = input.color(color.blue,"Long:",group = grp1t, inline = 't1')
+_timeframe_1_short = input.color(color.red,"Short:",group = grp1t, inline = 't1')
+
+_timeframe_2_b = input.bool(true,"", group = grp1t, inline='t2_')
+_timeframe_2 = input.timeframe("1W",'2nd timeframe', group = grp1t, inline = 't2_')
+_timeframe_2_candles = input.int(10,"Lookback:",group = grp1t, inline = 't2')
+_timeframe_2_long = input.color(color.navy,"Long:",group = grp1t, inline = 't2')
+_timeframe_2_short = input.color(color.purple,"Short:",group = grp1t, inline = 't2')
+
+_timeframe_3_b = input.bool(true,"", group = grp1t, inline='t3_')
+_timeframe_3 = input.timeframe("1D",'3rd timeframe', group = grp1t, inline = 't3_')
+_timeframe_3_candles = input.int(10,"Lookback:",group = grp1t, inline = 't3')
+_timeframe_3_long = input.color(color.lime,"Long:",group = grp1t, inline = 't3')
+_timeframe_3_short = input.color(color.olive,"Short:",group = grp1t, inline = 't3')
+
+
+_timeframe_4_b = input.bool(true,"", group = grp1t, inline='t4_')
+_timeframe_4 = input.timeframe("120",'4th timeframe', group = grp1t, inline = 't4_')
+_timeframe_4_candles = input.int(10,"Lookback:",group = grp1t, inline = 't4')
+_timeframe_4_long = input.color(color.green,"Long:",group = grp1t, inline = 't4')
+_timeframe_4_short = input.color(color.orange,"Short:",group = grp1t, inline = 't4')
+
+_timeframe_5_b = input.bool(true,"", group = grp1t, inline='t5_')
+_timeframe_5 = input.timeframe("60",'5th timeframe', group = grp1t, inline = 't5_')
+_timeframe_5_candles = input.int(10,"Lookback:",group = grp1t, inline = 't5')
+_timeframe_5_long = input.color(color.teal,"Long:",group = grp1t, inline = 't5')
+_timeframe_5_short = input.color(color.maroon,"Short:",group = grp1t, inline = 't5')
+var grp1a = "Account"
+_account_size = input.float(10000,"Account size",group = grp1a)
+_risk = input.float(1,"Risk[%]", group = grp1a)
+
+var grp1l = "Legend"
+
+
+_table_position = input.string("Top Left","Legend Position", ['Top Left', 'Top Center', 'Top Right', 'Middle Left', 'Middle Center','Middle Right', 'Bottom Left', 'Bottom Center', 'Bottom Right'], group = grp1l) 
+   
+_pos = position.bottom_right
+
+if (_table_position == 'Top Left') 
+    _pos := position.top_left
+if (_table_position == 'Top Center') 
+    _pos := position.top_center
+if (_table_position == 'Top Right') 
+    _pos := position.top_right
+if (_table_position == 'Middle Left') 
+    _pos := position.middle_left
+if (_table_position == 'Middle Center') 
+    _pos := position.middle_center
+if (_table_position == 'Middle Right') 
+    _pos := position.middle_right
+if (_table_position == 'Bottom Left') 
+    _pos := position.bottom_left
+if (_table_position == 'Bottom Center') 
+    _pos := position.bottom_center
+if (_table_position == 'Bottom Right') 
+    _pos := position.bottom_right
+_table_background = input.color(color.gray,"Legend Background", group = grp1l)
+_cell_size = input.int(10,"Long/Short column width", group = grp1l)
+_cell_size_long = input.int(8,"Long, target, stop width", group = grp1l)
+_cell_size_short = input.int(8,"Short, target, stop width", group = grp1l)
+
+
+_show_show_target_buys = input.bool(true, "Show target Long Trades")
+_show_show_target_sells = input.bool(true, "Show target Short Trades")
+
+_show_show_target_percent_buys = input.bool(true, "Show target perfecentage Long")
+_show_show_target_percent_sells = input.bool(true, "Show target perfecentage Short")
+
+_show_legend = input.bool(true, "Show Summary")
+_show_lines_short = input.bool(true, "Show Short Lines")
+_show_lines_long = input.bool(true, "Show Long Lines")
+
+heatmap_rgb(x) => 
+   
+    
+    R = 0.0
+    G = 0.0
+    if x > 0 and x < 25
+        R := 128 + (127 * (x / 25))
+        G := 0.0
+        
+    else if  x>=25 and x < 50
+        R := 255
+        G := 255 * ((x - 25) / 25)
+        
+    else if x>=50 and x<75
+        R := 255 * (1 - ((x - 50) / 25))
+        G := 255
+       
+    else 
+        R := 0.0
+        G := 255 - (127 * ((x - 75) / 25))
+        
+    color.rgb(math.round(R), math.round(G),0)
+
+
+
+_legend_font_size = input.string("Normal", "Legend Font:",options = ['Auto','Huge','Large','Normal', 'Small','Tiny'], group = grp1l)
+
+
+var LegendTable = table.new(_pos,20,11,_table_background,color.rgb(80,80,80),1)
+if (_show_legend)
+    table.merge_cells(LegendTable,0,0,2,0)
+    table.merge_cells(LegendTable,0,1,2,1)
+    table.cell(LegendTable,0,0,"RISK REWARD\n"+syminfo.description+" | "+syminfo.ticker, text_color = color.white, text_halign = text.align_center, text_size = getFontSize(_legend_font_size), text_size =getFontSize(_legend_font_size))
+    table.cell(LegendTable,0,1,"Account Size: "+str.format("${0,number,#,###.00}",_account_size)+"\nRisk: "+str.format("{0,number,#,##.0}%",_risk)+"\n"+"Bet "+str.format("${0,number,#,###.00}",(_risk/100)*_account_size)+" to win", text_color = color.white, text_halign = text.align_left, text_size =getFontSize(_legend_font_size))
+
+_labels = (_timeframe_1_b?2:0)+(_timeframe_2_b?2:0)+(_timeframe_3_b?2:0)+(_timeframe_4_b?2:0)+(_timeframe_5_b?2:0)
+
+_lowest_1 = _timeframe_1_b?request.security(syminfo.tickerid, _timeframe_1,ta.lowest(low,_timeframe_1_candles)):na
+_highest_1 = _timeframe_1_b?request.security(syminfo.tickerid, _timeframe_1,ta.highest(high,_timeframe_1_candles)):na
+
+_lowest_2 = _timeframe_2_b?request.security(syminfo.tickerid, _timeframe_2,ta.lowest(low,_timeframe_2_candles)):na
+_highest_2 = _timeframe_2_b?request.security(syminfo.tickerid, _timeframe_2,ta.highest(high,_timeframe_2_candles)):na
+
+_lowest_3 = _timeframe_3_b?request.security(syminfo.tickerid, _timeframe_3,ta.lowest(low,_timeframe_3_candles)):na
+_highest_3 = _timeframe_3_b?request.security(syminfo.tickerid, _timeframe_3,ta.highest(high,_timeframe_3_candles)):na
+
+_lowest_4 = _timeframe_4_b?request.security(syminfo.tickerid, _timeframe_4,ta.lowest(low,_timeframe_4_candles)):na
+_highest_4 = _timeframe_4_b?request.security(syminfo.tickerid, _timeframe_4,ta.highest(high,_timeframe_4_candles)):na
+
+_lowest_5 = _timeframe_5_b?request.security(syminfo.tickerid, _timeframe_5,ta.lowest(low,_timeframe_5_candles)):na
+_highest_5 = _timeframe_5_b?request.security(syminfo.tickerid, _timeframe_5,ta.highest(high,_timeframe_5_candles)):na
+
+_plot_1_l = (_highest_1-close)/(close-_lowest_1)
+_plot_1_s = (close-_lowest_1)/(_highest_1-close)
+
+_plot_1_s := _plot_1_s<0?0:_plot_1_s
+_plot_1_l := _plot_1_l<0?0:_plot_1_l
+
+plot(_show_lines_long?_plot_1_l:na, title = "Long Time Frame 1", color = _heatmap_colors?heatmap_rgb(math.min(100,_plot_1_l*1000)):_timeframe_1_long, editable=false)
+plot(_show_lines_short?_plot_1_s:na, title = "Short Time Frame 1", color =_heatmap_colors?heatmap_rgb(math.min(100,_plot_1_s*1000)):_timeframe_1_short, editable=false)
+
+
+_plot_2_l = (_highest_2-close)/(close-_lowest_2)
+_plot_2_s = (close-_lowest_2)/(_highest_2-close)
+_plot_2_s := _plot_2_s<0?0:_plot_2_s
+_plot_2_l := _plot_2_l<0?0:_plot_2_l
+plot(_show_lines_long?_plot_2_l:na, title = "Long Time Frame 2", color = _heatmap_colors?heatmap_rgb(math.min(100,_plot_2_l*1000)):_timeframe_2_long, editable=false)
+plot(_show_lines_short?_plot_2_s:na, title = "Short Time Frame 2", color = _heatmap_colors?heatmap_rgb(math.min(100,_plot_2_s*1000)):_timeframe_2_short, editable=false)
+
+
+_plot_3_l = (_highest_3-close)/(close-_lowest_3)
+_plot_3_s = (close-_lowest_3)/(_highest_3-close)
+_plot_3_s := _plot_3_s<0?0:_plot_3_s
+_plot_3_l := _plot_3_l<0?0:_plot_3_l
+plot(_show_lines_long?_plot_3_l:na, title = "Long Time Frame 3", color = _timeframe_3_long, editable=false)
+plot(_show_lines_short?_plot_3_s:na, title = "Short Time Frame 3", color = _timeframe_3_short, editable=false)
+
+_plot_4_l = (_highest_4-close)/(close-_lowest_4)
+_plot_4_s = (close-_lowest_4)/(_highest_4-close)
+
+_plot_4_s := _plot_4_s<0?0:_plot_4_s
+_plot_4_l := _plot_4_l<0?0:_plot_4_l
+plot(_show_lines_long?_plot_4_l:na, title = "Long Time Frame 4", color = _timeframe_4_long, editable=false)
+plot(_show_lines_short?_plot_4_s:na, title = "Short Time Frame 4", color = _timeframe_4_short, editable=false)
+
+_plot_5_l = (_highest_5-close)/(close-_lowest_5)
+_plot_5_s = (close-_lowest_5)/(_highest_5-close)
+_plot_5_s := _plot_5_s<0?0:_plot_5_s
+_plot_5_l := _plot_5_l<0?0:_plot_5_l
+
+plot(_show_lines_long?_plot_5_l:na, title = "Long Time Frame 5", color = _timeframe_5_long, editable=false)
+plot(_show_lines_short?_plot_5_s:na, title = "Short Time Frame 5", color = _timeframe_5_short, editable=false)
+plot(0,title = "Zero Line", linewidth = 1, color = color.orange)
+
+if array.size(label.all)<_labels   
+    label.new(na,na,"",xloc = xloc.bar_time)   
+if barstate.islast
+    _label_count = 0
+    if _show_legend
+        table.cell(LegendTable,0,2,"Timeframe", text_size =getFontSize(_legend_font_size), text_color = color.white)
+        table.cell(LegendTable,1,2,"Long", text_size=getFontSize(_legend_font_size), text_color = color.white)    
+        table.cell(LegendTable,2,2,"Short", text_size=getFontSize(_legend_font_size), text_color = color.white)
+    if _show_show_target_buys and _show_legend
+        table.cell(LegendTable,3,2,"Buy      ", text_size=getFontSize(_legend_font_size), text_color = color.white,text_halign = text.align_left)
+        table.cell(LegendTable,4,2,"Target   ", text_size=getFontSize(_legend_font_size), text_color = color.white, text_halign = text.align_left)
+        table.cell(LegendTable,5,2,"Stop     ", text_size=getFontSize(_legend_font_size), text_color = color.white,text_halign = text.align_left)
+    if _show_show_target_percent_buys and _show_legend
+        table.cell(LegendTable,6,2,"TP%", text_size=getFontSize(_legend_font_size), text_color = color.white,text_halign = text.align_left)
+        table.cell(LegendTable,7,2,"Stop%", text_size=getFontSize(_legend_font_size), text_color = color.white, text_halign = text.align_left)
+
+
+
+    if _show_show_target_sells and _show_legend
+        table.cell(LegendTable,8,2,"Sell     ", text_size=getFontSize(_legend_font_size), text_color = color.white,text_halign = text.align_left)
+        table.cell(LegendTable,9,2,"Target   ", text_size=getFontSize(_legend_font_size), text_color = color.white,text_halign = text.align_left)
+        table.cell(LegendTable,10,2,"Stop    ", text_size=getFontSize(_legend_font_size), text_color = color.white,text_halign = text.align_left)
+
+
+    if _show_show_target_percent_sells and _show_legend
+        table.cell(LegendTable,11,2,"TP%", text_size=getFontSize(_legend_font_size), text_color = color.white,text_halign = text.align_left)
+        table.cell(LegendTable,12,2,"Stop%", text_size=getFontSize(_legend_font_size), text_color = color.white, text_halign = text.align_left)
+
+
+    if _show_legend
+        table.cell_set_width(LegendTable,0,2,0)
+        table.cell_set_width(LegendTable,1,2,_cell_size)
+        table.cell_set_width(LegendTable,2,2,_cell_size)
+
+        table.cell_set_width(LegendTable,3,2,_cell_size_long)
+        table.cell_set_width(LegendTable,4,2,_cell_size_long)
+        table.cell_set_width(LegendTable,5,2,_cell_size_long)
+
+        table.cell_set_width(LegendTable,8,2,_cell_size_short)
+        table.cell_set_width(LegendTable,9,2,_cell_size_short)
+        table.cell_set_width(LegendTable,10,2,_cell_size_short)
+
+    if _show_show_target_percent_buys and _show_legend
+        table.cell_set_width(LegendTable,6,2,_cell_size_long)
+        table.cell_set_width(LegendTable,7,2,_cell_size_long)
+    if _show_show_target_percent_sells and _show_legend
+        table.cell_set_width(LegendTable,11,2,_cell_size_short)
+        table.cell_set_width(LegendTable,12,2,_cell_size_short)
+
+    if _timeframe_1_b
+        if _show_legend
+            table.cell(LegendTable,0,3,timeframe_name(_timeframe_1), text_size =getFontSize(_legend_font_size), text_color = color.white, text_halign = text.align_left)
+            table.cell(LegendTable,1,3,str.format("${0,number,#,###.00}",_plot_1_l*(_risk/100)*_account_size), text_size=getFontSize(_legend_font_size), text_color = _heatmap_colors?((_plot_1_l>0.4 and _plot_1_l<0.82)?color.black:color.white):color.white, bgcolor = _heatmap_colors?heatmap_rgb(math.min(100,_plot_1_l*100)):_timeframe_1_long, text_halign = text.align_center)
+            table.cell(LegendTable,2,3,str.format("${0,number,#,###.00}",_plot_1_s*(_risk/100)*_account_size), text_size=getFontSize(_legend_font_size), text_color = _heatmap_colors?((_plot_1_s>0.4 and _plot_1_s<0.82)?color.black:color.white):color.white, bgcolor = _heatmap_colors?heatmap_rgb(math.min(100,_plot_1_s*100)):_timeframe_1_short, text_halign = text.align_center)
+        if _show_show_target_buys and _show_legend
+            table.cell(LegendTable,3,3,str.tostring(close), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(69,151,130), text_halign = text.align_center)
+            table.cell(LegendTable,4,3,str.tostring(_highest_1), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(69,151,130), text_halign = text.align_center)
+            table.cell(LegendTable,5,3,str.tostring(_lowest_1), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(69,151,130), text_halign = text.align_center)
+
+
+        if _show_show_target_percent_buys and _show_legend
+            table.cell(LegendTable,6,3,str.format("{0,number,#,###.00%}",((_highest_1-close)/close)), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(69,151,130), text_halign = text.align_center)
+            table.cell(LegendTable,7,3,str.format("{0,number,#,###.00%}",((close-_lowest_1)/close)), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(69,151,130), text_halign = text.align_center)
+        if _show_show_target_percent_sells and _show_legend
+            table.cell(LegendTable,11,3,str.format("{0,number,#,###.00%}",((close-_lowest_1)/close)), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(223,72,76), text_halign = text.align_center)
+            table.cell(LegendTable,12,3,str.format("{0,number,#,###.00%}",((_highest_1-close)/close)), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(223,72,76), text_halign = text.align_center)
+
+        if _show_show_target_sells and _show_legend
+            table.cell(LegendTable,8,3,str.tostring(close), text_size=getFontSize(_legend_font_size), text_color = color.white, bgcolor = color.rgb(223,72,76), text_halign = text.align_center)
+            table.cell(LegendTable,9,3,str.tostring(_lowest_1), text_size=getFontSize(_legend_font_size), text_color = color.white, bgcolor = color.rgb(223,72,76), text_halign = text.align_center)
+            table.cell(LegendTable,10,3,str.tostring(_highest_1), text_size=getFontSize(_legend_font_size), text_color = color.white, bgcolor = color.rgb(223,72,76), text_halign = text.align_center)
+
+        if _show_lines_long
+            _label = array.get(label.all,_label_count)
+            _label_count += 1
+            label.set_yloc(_label, yloc.price)
+            label.set_xy(_label, time,_plot_1_l)
+            label.set_text(_label,str.tostring(math.round(_plot_1_l,2))+"   "+str.format("${0,number,#,###.00}",_plot_1_l*(_risk/100)*_account_size)+" Long  "+timeframe_name(_timeframe_1))
+            label.set_style(_label, label.style_label_left)
+            label.set_textcolor(_label,_heatmap_colors?((_plot_1_l>0.4 and _plot_1_l<0.82)?color.black:color.white):color.white)
+            label.set_color(_label, _heatmap_colors?heatmap_rgb(math.min(100,_plot_1_l*100)):_timeframe_1_long)  
+        if _show_lines_short    
+            _label = array.get(label.all,_label_count)
+            _label_count += 1
+            label.set_yloc(_label, yloc.price)
+            label.set_xy(_label, time,_plot_1_s)
+            label.set_text(_label,str.tostring(math.round(_plot_1_s,2))+"   "+str.format("${0,number,#,###.00}",_plot_1_s*(_risk/100)*_account_size)+" Short  "+timeframe_name(_timeframe_1))
+            label.set_style(_label, label.style_label_left)
+            label.set_textcolor(_label,_heatmap_colors?((_plot_1_s>0.4 and _plot_1_s<0.82)?color.black:color.white):color.white)
+            label.set_color(_label, _heatmap_colors?heatmap_rgb(math.min(100,_plot_1_s*100)):_timeframe_1_short)  
+            
+    if _timeframe_2_b
+        if _show_legend
+            table.cell(LegendTable,0,4,timeframe_name(_timeframe_2), text_size =getFontSize(_legend_font_size), text_color = color.white, text_halign = text.align_left)
+            table.cell(LegendTable,1,4,str.format("${0,number,#,###.00}",_plot_2_l*(_risk/100)*_account_size), text_size=getFontSize(_legend_font_size), text_color = _heatmap_colors?((_plot_2_l>0.4 and _plot_2_l<0.82)?color.black:color.white):color.white, bgcolor = _heatmap_colors?heatmap_rgb(math.min(100,_plot_2_l*100)):_timeframe_2_long, text_halign = text.align_center)
+            table.cell(LegendTable,2,4,str.format("${0,number,#,###.00}",_plot_2_s*(_risk/100)*_account_size), text_size=getFontSize(_legend_font_size), text_color = _heatmap_colors?((_plot_2_s>0.4 and _plot_2_s<0.82)?color.black:color.white):color.white, bgcolor = _heatmap_colors?heatmap_rgb(math.min(100,_plot_2_s*100)):_timeframe_2_short, text_halign = text.align_center)
+
+        if _show_show_target_buys and _show_legend
+            table.cell(LegendTable,3,4,str.tostring(close), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(69,151,130), text_halign = text.align_center)
+            table.cell(LegendTable,4,4,str.tostring(_highest_2), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(69,151,130), text_halign = text.align_center)
+            table.cell(LegendTable,5,4,str.tostring(_lowest_2), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(69,151,130), text_halign = text.align_center)
+        if _show_show_target_sells and _show_legend
+            table.cell(LegendTable,8,4,str.tostring(close), text_size=getFontSize(_legend_font_size), text_color = color.white, bgcolor = color.rgb(223,72,76), text_halign = text.align_center)
+            table.cell(LegendTable,9,4,str.tostring(_lowest_2), text_size=getFontSize(_legend_font_size), text_color = color.white, bgcolor = color.rgb(223,72,76), text_halign = text.align_center)
+            table.cell(LegendTable,10,4,str.tostring(_highest_2), text_size=getFontSize(_legend_font_size), text_color = color.white, bgcolor = color.rgb(223,72,76), text_halign = text.align_center)
+        if _show_show_target_percent_buys and _show_legend
+            table.cell(LegendTable,6,4,str.format("{0,number,#,###.00%}",((_highest_2-close)/close)), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(69,151,130), text_halign = text.align_center)
+            table.cell(LegendTable,7,4,str.format("{0,number,#,###.00%}",((close-_lowest_2)/close)), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(69,151,130), text_halign = text.align_center)
+        if _show_show_target_percent_sells and _show_legend
+            table.cell(LegendTable,11,4,str.format("{0,number,#,###.00%}",((close-_lowest_2)/close)), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(223,72,76), text_halign = text.align_center)
+            table.cell(LegendTable,12,4,str.format("{0,number,#,###.00%}",((_highest_2-close)/close)), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(223,72,76), text_halign = text.align_center)
+        if _show_lines_long
+            _label = array.get(label.all,_label_count)
+            _label_count += 1
+            label.set_yloc(_label, yloc.price)
+            label.set_xy(_label, time,_plot_2_l)
+            label.set_text(_label,str.tostring(math.round(_plot_2_l,2))+"   "+str.format("${0,number,#,###.00}",_plot_2_l*(_risk/100)*_account_size)+" Long  "+timeframe_name(_timeframe_2))
+            label.set_style(_label, label.style_label_left)
+            label.set_textcolor(_label,_heatmap_colors?((_plot_2_l>0.4 and _plot_2_l<0.82)?color.black:color.white):color.white)
+            label.set_color(_label, _heatmap_colors?heatmap_rgb(math.min(100,_plot_2_l*100)):_timeframe_2_long)  
+        if _show_lines_short
+            _label = array.get(label.all,_label_count)
+            _label_count += 1
+            label.set_yloc(_label, yloc.price)
+            label.set_xy(_label, time,_plot_2_s)
+            label.set_text(_label,str.tostring(math.round(_plot_2_s,2))+"   "+str.format("${0,number,#,###.00}",_plot_2_s*(_risk/100)*_account_size)+" Short  "+timeframe_name(_timeframe_2))
+            label.set_style(_label, label.style_label_left)
+            label.set_textcolor(_label,_heatmap_colors?((_plot_2_s>0.4 and _plot_2_s<0.82)?color.black:color.white):color.white)
+            label.set_color(_label, _heatmap_colors?heatmap_rgb(math.min(100,_plot_2_s*100)):_timeframe_2_short)  
+        
+    if _timeframe_3_b
+        if _show_legend
+            table.cell(LegendTable,0,5,timeframe_name(_timeframe_3), text_size =getFontSize(_legend_font_size), text_color = color.white, text_halign = text.align_left)
+            
+            table.cell(LegendTable,1,5,str.format("${0,number,#,###.00}",_plot_3_l*(_risk/100)*_account_size), text_size=getFontSize(_legend_font_size), text_color = _heatmap_colors?((_plot_3_l>0.4 and _plot_3_l<0.82)?color.black:color.white):color.white, bgcolor = _heatmap_colors?heatmap_rgb(math.min(100,_plot_3_l*100)):_timeframe_3_long, text_halign = text.align_center)
+            table.cell(LegendTable,2,5,str.format("${0,number,#,###.00}",_plot_3_s*(_risk/100)*_account_size), text_size=getFontSize(_legend_font_size), text_color = _heatmap_colors?((_plot_3_s>0.4 and _plot_3_s<0.82)?color.black:color.white):color.white, bgcolor = _heatmap_colors?heatmap_rgb(math.min(100,_plot_3_s*100)):_timeframe_3_short, text_halign = text.align_center)
+
+        if _show_show_target_buys and _show_legend
+            table.cell(LegendTable,3,5,str.tostring(close), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(69,151,130), text_halign = text.align_center)
+            table.cell(LegendTable,4,5,str.tostring(_highest_3), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(69,151,130), text_halign = text.align_center)
+            table.cell(LegendTable,5,5,str.tostring(_lowest_3), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(69,151,130), text_halign = text.align_center)
+        if _show_show_target_sells and _show_legend
+            table.cell(LegendTable,8,5,str.tostring(close), text_size=getFontSize(_legend_font_size), text_color = color.white, bgcolor = color.rgb(223,72,76), text_halign = text.align_center)
+            table.cell(LegendTable,9,5,str.tostring(_lowest_3), text_size=getFontSize(_legend_font_size), text_color = color.white, bgcolor = color.rgb(223,72,76), text_halign = text.align_center)
+            table.cell(LegendTable,10,5,str.tostring(_highest_3), text_size=getFontSize(_legend_font_size), text_color = color.white, bgcolor = color.rgb(223,72,76), text_halign = text.align_center)
+
+        if _show_show_target_percent_buys and _show_legend
+            table.cell(LegendTable,6,5,str.format("{0,number,#,###.00%}",((_highest_3-close)/close)), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(69,151,130), text_halign = text.align_center)
+            table.cell(LegendTable,7,5,str.format("{0,number,#,###.00%}",((close-_lowest_3)/close)), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(69,151,130), text_halign = text.align_center)
+        if _show_show_target_percent_sells and _show_legend
+            table.cell(LegendTable,11,5,str.format("{0,number,#,###.00%}",((close-_lowest_3)/close)), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(223,72,76), text_halign = text.align_center)
+            table.cell(LegendTable,12,5,str.format("{0,number,#,###.00%}",((_highest_3-close)/close)), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(223,72,76), text_halign = text.align_center)
+
+
+        if _show_lines_long
+            _label = array.get(label.all,_label_count)
+            _label_count += 1
+            label.set_yloc(_label, yloc.price)
+            label.set_xy(_label, time,_plot_3_l)
+            label.set_style(_label, label.style_label_left)
+            label.set_textcolor(_label,_heatmap_colors?((_plot_3_l>0.4 and _plot_3_l<0.82)?color.black:color.white):color.white)
+            label.set_color(_label, _heatmap_colors?heatmap_rgb(math.min(100,_plot_3_l*100)):_timeframe_3_long)  
+        if _show_lines_short
+            _label = array.get(label.all,_label_count)
+            _label_count += 1
+            label.set_yloc(_label, yloc.price)
+            label.set_xy(_label, time,_plot_3_s)
+            label.set_text(_label,str.tostring(math.round(_plot_3_s,2))+"   "+str.format("${0,number,#,###.00}",_plot_3_s*(_risk/100)*_account_size)+" Short  "+timeframe_name(_timeframe_3))
+            label.set_style(_label, label.style_label_left)
+            label.set_textcolor(_label,_heatmap_colors?((_plot_3_s>0.4 and _plot_3_s<0.82)?color.black:color.white):color.white)
+            label.set_color(_label, _heatmap_colors?heatmap_rgb(math.min(100,_plot_3_s*100)):_timeframe_3_short)  
+        
+    if _timeframe_4_b
+        if _show_legend
+            table.cell(LegendTable,0,6,timeframe_name(_timeframe_4), text_size =getFontSize(_legend_font_size), text_color = color.white, text_halign = text.align_left)
+
+            table.cell(LegendTable,1,6,str.format("${0,number,#,###.00}",_plot_4_l*(_risk/100)*_account_size), text_size=getFontSize(_legend_font_size), text_color = _heatmap_colors?((_plot_4_l>0.4 and _plot_4_l<0.82)?color.black:color.white):color.white, bgcolor = _heatmap_colors?heatmap_rgb(math.min(100,_plot_4_l*100)):_timeframe_4_long, text_halign = text.align_center)
+            table.cell(LegendTable,2,6,str.format("${0,number,#,###.00}",_plot_4_s*(_risk/100)*_account_size), text_size=getFontSize(_legend_font_size), text_color = _heatmap_colors?((_plot_4_s>0.4 and _plot_4_s<0.82)?color.black:color.white):color.white, bgcolor = _heatmap_colors?heatmap_rgb(math.min(100,_plot_4_s*100)):_timeframe_4_short, text_halign = text.align_center)
+        if  _show_show_target_buys and _show_legend
+            table.cell(LegendTable,3,6,str.tostring(close), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(69,151,130), text_halign = text.align_center)
+            table.cell(LegendTable,4,6,str.tostring(_highest_4), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(69,151,130), text_halign = text.align_center)
+            table.cell(LegendTable,5,6,str.tostring(_lowest_4), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(69,151,130), text_halign = text.align_center)
+        if _show_show_target_sells and _show_legend
+            table.cell(LegendTable,8,6,str.tostring(close), text_size=getFontSize(_legend_font_size), text_color = color.white, bgcolor = color.rgb(223,72,76), text_halign = text.align_center)
+            table.cell(LegendTable,9,6,str.tostring(_lowest_4), text_size=getFontSize(_legend_font_size), text_color = color.white, bgcolor = color.rgb(223,72,76), text_halign = text.align_center)
+            table.cell(LegendTable,10,6,str.tostring(_highest_4), text_size=getFontSize(_legend_font_size), text_color = color.white, bgcolor = color.rgb(223,72,76), text_halign = text.align_center)
+        if _show_show_target_percent_buys and _show_legend
+            table.cell(LegendTable,6,6,str.format("{0,number,#,###.00%}",((_highest_4-close)/close)), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(69,151,130), text_halign = text.align_center)
+            table.cell(LegendTable,7,6,str.format("{0,number,#,###.00%}",((close-_lowest_4)/close)), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(69,151,130), text_halign = text.align_center)
+        if _show_show_target_percent_sells and _show_legend
+            table.cell(LegendTable,11,6,str.format("{0,number,#,###.00%}",((close-_lowest_4)/close)), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(223,72,76), text_halign = text.align_center)
+            table.cell(LegendTable,12,6,str.format("{0,number,#,###.00%}",((_highest_4-close)/close)), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(223,72,76), text_halign = text.align_center)
+        if _show_lines_long
+            _label = array.get(label.all,_label_count)
+            _label_count += 1
+            label.set_yloc(_label, yloc.price)
+            label.set_xy(_label, time,_plot_4_l)
+            label.set_text(_label,str.tostring(math.round(_plot_4_l,2))+"   "+str.format("${0,number,#,###.00}",_plot_4_l*(_risk/100)*_account_size)+" Long  "+timeframe_name(_timeframe_4))
+            label.set_style(_label, label.style_label_left)
+            label.set_textcolor(_label,_heatmap_colors?((_plot_4_l>0.4 and _plot_4_l<0.82)?color.black:color.white):color.white)
+            label.set_color(_label, _heatmap_colors?heatmap_rgb(math.min(100,_plot_4_l*100)):_timeframe_4_long)  
+        if _show_lines_short
+            _label = array.get(label.all,_label_count)
+            _label_count += 1
+            label.set_yloc(_label, yloc.price)
+            label.set_xy(_label, time,_plot_4_s)
+            label.set_text(_label,str.tostring(math.round(_plot_4_s,2))+"   "+str.format("${0,number,#,###.00}",_plot_4_s*(_risk/100)*_account_size)+" Short  "+timeframe_name(_timeframe_4))
+            label.set_style(_label, label.style_label_left)
+            label.set_textcolor(_label,_heatmap_colors?((_plot_4_s>0.4 and _plot_4_s<0.82)?color.black:color.white):color.white)
+            label.set_color(_label, _heatmap_colors?heatmap_rgb(math.min(100,_plot_4_s*100)):_timeframe_4_short)  
+    
+    if _timeframe_5_b
+        if _show_legend
+            table.cell(LegendTable,0,7,timeframe_name(_timeframe_5), text_size =getFontSize(_legend_font_size), text_color = color.white, text_halign = text.align_left)
+            table.cell(LegendTable,1,7,str.format("${0,number,#,###.00}",_plot_5_l*(_risk/100)*_account_size), text_size=getFontSize(_legend_font_size), text_color = _heatmap_colors?((_plot_5_l>0.4 and _plot_5_l<0.82)?color.black:color.white):color.white, bgcolor = _heatmap_colors?heatmap_rgb(math.min(100,_plot_5_l*100)):_timeframe_5_long, text_halign = text.align_center)
+            table.cell(LegendTable,2,7,str.format("${0,number,#,###.00}",_plot_5_s*(_risk/100)*_account_size), text_size=getFontSize(_legend_font_size), text_color = _heatmap_colors?((_plot_5_s>0.4 and _plot_5_s<0.82)?color.black:color.white):color.white, bgcolor = _heatmap_colors?heatmap_rgb(math.min(100,_plot_5_s*100)):_timeframe_5_short, text_halign = text.align_center)
+        if  _show_show_target_buys and _show_legend
+            table.cell(LegendTable,3,7,str.tostring(close), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(69,151,130), text_halign = text.align_center)
+            table.cell(LegendTable,4,7,str.tostring(_highest_5), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(69,151,130), text_halign = text.align_center)
+            table.cell(LegendTable,5,7,str.tostring(_lowest_5), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(69,151,130), text_halign = text.align_center)
+        if  _show_show_target_sells and _show_legend
+            table.cell(LegendTable,8,7,str.tostring(close), text_size=getFontSize(_legend_font_size), text_color = color.white, bgcolor = color.rgb(223,72,76), text_halign = text.align_center)
+            table.cell(LegendTable,9,7,str.tostring(_lowest_5), text_size=getFontSize(_legend_font_size), text_color = color.white, bgcolor = color.rgb(223,72,76), text_halign = text.align_center)
+            table.cell(LegendTable,10,7,str.tostring(_highest_5), text_size=getFontSize(_legend_font_size), text_color = color.white, bgcolor = color.rgb(223,72,76), text_halign = text.align_center)
+        if _show_show_target_percent_buys and _show_legend
+            table.cell(LegendTable,6,7,str.format("{0,number,#,###.00%}",((_highest_5-close)/close)), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(69,151,130), text_halign = text.align_center)
+            table.cell(LegendTable,7,7,str.format("{0,number,#,###.00%}",((close-_lowest_5)/close)), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(69,151,130), text_halign = text.align_center)
+        if _show_show_target_percent_sells and _show_legend
+            table.cell(LegendTable,11,7,str.format("{0,number,#,###.00%}",((close-_lowest_5)/close)), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(223,72,76), text_halign = text.align_center)
+            table.cell(LegendTable,12,7,str.format("{0,number,#,###.00%}",((_highest_5-close)/close)), text_size=getFontSize(_legend_font_size), text_color = color.white,bgcolor = color.rgb(223,72,76), text_halign = text.align_center)
+
+
+        if _show_lines_long
+            _label = array.get(label.all,_label_count)
+            _label_count += 1
+            label.set_yloc(_label, yloc.price)
+            label.set_xy(_label, time,_plot_5_l)
+            label.set_text(_label,str.tostring(math.round(_plot_5_l,2))+"   "+str.format("${0,number,#,###.00}",_plot_5_l*(_risk/100)*_account_size)+" Long  "+timeframe_name(_timeframe_5))
+            label.set_style(_label, label.style_label_left)
+            label.set_textcolor(_label,_heatmap_colors?((_plot_5_l>0.4 and _plot_5_l<0.82)?color.black:color.white):color.white)
+            label.set_color(_label, _heatmap_colors?heatmap_rgb(math.min(100,_plot_5_l*100)):_timeframe_5_long)  
+        if _show_lines_short
+            _label = array.get(label.all,_label_count)
+            _label_count += 1
+            label.set_yloc(_label, yloc.price)
+            label.set_xy(_label, time,_plot_5_s)
+            label.set_text(_label,str.tostring(math.round(_plot_5_s,2))+"   "+str.format("${0,number,#,###.00}",_plot_5_s*(_risk/100)*_account_size)+" Short  "+timeframe_name(_timeframe_5))
+            label.set_style(_label, label.style_label_left)
+            label.set_textcolor(_label,_heatmap_colors?((_plot_5_s>0.4 and _plot_5_s<0.82)?color.black:color.white):color.white)
+            label.set_color(_label, _heatmap_colors?heatmap_rgb(math.min(100,_plot_5_s*100)):_timeframe_5_short)  
+
